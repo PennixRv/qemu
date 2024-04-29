@@ -291,19 +291,6 @@ F: disas/*mips.c
 F: docs/system/cpu-models-mips.rst.inc
 F: tests/tcg/mips/
 
-NiosII TCG CPUs
-R: Chris Wulff <crwulff@gmail.com>
-R: Marek Vasut <marex@denx.de>
-S: Orphan
-F: target/nios2/
-F: hw/nios2/
-F: hw/intc/nios2_vic.c
-F: disas/nios2.c
-F: include/hw/intc/nios2_vic.h
-F: configs/devices/nios2-softmmu/default.mak
-F: tests/docker/dockerfiles/debian-nios2-cross.d/build-toolchain.sh
-F: tests/tcg/nios2/
-
 OpenRISC TCG CPUs
 M: Stafford Horne <shorne@gmail.com>
 S: Odd Fixes
@@ -1128,6 +1115,7 @@ M: Inès Varhol <ines.varhol@telecom-paris.fr>
 L: qemu-arm@nongnu.org
 S: Maintained
 F: hw/arm/stm32l4x5_soc.c
+F: hw/char/stm32l4x5_usart.c
 F: hw/misc/stm32l4x5_exti.c
 F: hw/misc/stm32l4x5_syscfg.c
 F: hw/misc/stm32l4x5_rcc.c
@@ -2478,7 +2466,7 @@ F: tests/qtest/libqos/e1000e.*
 
 igb
 M: Akihiko Odaki <akihiko.odaki@daynix.com>
-R: Sriram Yagnaraman <sriram.yagnaraman@est.tech>
+R: Sriram Yagnaraman <sriram.yagnaraman@ericsson.com>
 S: Maintained
 F: docs/system/devices/igb.rst
 F: hw/net/igb*
@@ -3704,6 +3692,7 @@ Overall usermode emulation
 M: Riku Voipio <riku.voipio@iki.fi>
 S: Maintained
 F: accel/tcg/user-exec*.c
+F: include/exec/user/
 F: include/user/
 F: common-user/
 
@@ -3818,7 +3807,7 @@ F: block/vmdk.c
 
 RBD
 M: Ilya Dryomov <idryomov@gmail.com>
-R: Peter Lieven <pl@kamp.de>
+R: Peter Lieven <pl@dlhnet.de>
 L: qemu-block@nongnu.org
 S: Supported
 F: block/rbd.c
@@ -3844,7 +3833,7 @@ F: block/blkio.c
 iSCSI
 M: Ronnie Sahlberg <ronniesahlberg@gmail.com>
 M: Paolo Bonzini <pbonzini@redhat.com>
-M: Peter Lieven <pl@kamp.de>
+M: Peter Lieven <pl@dlhnet.de>
 L: qemu-block@nongnu.org
 S: Odd Fixes
 F: block/iscsi.c
@@ -3867,7 +3856,7 @@ T: git https://repo.or.cz/qemu/ericb.git nbd
 T: git https://gitlab.com/vsementsov/qemu.git block
 
 NFS
-M: Peter Lieven <pl@kamp.de>
+M: Peter Lieven <pl@dlhnet.de>
 L: qemu-block@nongnu.org
 S: Maintained
 F: block/nfs.c
@@ -4057,16 +4046,6 @@ F: block/replication.c
 F: tests/unit/test-replication.c
 F: docs/block-replication.txt
 
-PVRDMA
-M: Yuval Shaia <yuval.shaia.ml@gmail.com>
-M: Marcel Apfelbaum <marcel.apfelbaum@gmail.com>
-S: Odd Fixes
-F: hw/rdma/*
-F: hw/rdma/vmw/*
-F: docs/pvrdma.txt
-F: contrib/rdmacm-mux/*
-F: qapi/rdma.json
-
 Semihosting
 M: Alex Bennée <alex.bennee@linaro.org>
 S: Maintained
@@ -4252,3 +4231,8 @@ Code Coverage Tools
 M: Alex Bennée <alex.bennee@linaro.org>
 S: Odd Fixes
 F: scripts/coverage/
+
+Machine development tool
+M: Maksim Davydov <davydov-max@yandex-team.ru>
+S: Supported
+F: scripts/compare-machine-types.py
