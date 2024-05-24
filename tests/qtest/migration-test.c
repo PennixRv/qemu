@@ -427,38 +427,6 @@ static void migrate_set_parameter_str(QTestState *who, const char *parameter,
     migrate_check_parameter_str(who, parameter, value);
 }
 
-static long long migrate_get_parameter_bool(QTestState *who,
-                                           const char *parameter)
-{
-    QDict *rsp;
-    int result;
-
-    rsp = qtest_qmp_assert_success_ref(
-        who, "{ 'execute': 'query-migrate-parameters' }");
-    result = qdict_get_bool(rsp, parameter);
-    qobject_unref(rsp);
-    return !!result;
-}
-
-static void migrate_check_parameter_bool(QTestState *who, const char *parameter,
-                                        int value)
-{
-    int result;
-
-    result = migrate_get_parameter_bool(who, parameter);
-    g_assert_cmpint(result, ==, value);
-}
-
-static void migrate_set_parameter_bool(QTestState *who, const char *parameter,
-                                      int value)
-{
-    qtest_qmp_assert_success(who,
-                             "{ 'execute': 'migrate-set-parameters',"
-                             "'arguments': { %s: %i } }",
-                             parameter, value);
-    migrate_check_parameter_bool(who, parameter, value);
-}
-
 static void migrate_ensure_non_converge(QTestState *who)
 {
     /* Can't converge with 1ms downtime + 3 mbs bandwidth limit */
@@ -811,6 +779,12 @@ static int test_migrate_start(QTestState **from, QTestState **to,
 
     if (args->use_dirty_ring) {
         kvm_opts = ",dirty-ring-size=4096";
+    }
+
+    if (!qtest_has_machine(machine_alias)) {
+        g_autofree char *msg = g_strdup_printf("machine %s not supported", machine_alias);
+        g_test_skip(msg);
+        return -1;
     }
 
     machine = resolve_machine_version(machine_alias, QEMU_ENV_SRC,
@@ -1240,36 +1214,6 @@ test_migrate_tls_x509_finish(QTestState *from,
 #endif /* CONFIG_TASN1 */
 #endif /* CONFIG_GNUTLS */
 
-static void *
-test_migrate_compress_start(QTestState *from,
-                            QTestState *to)
-{
-    migrate_set_parameter_int(from, "compress-level", 1);
-    migrate_set_parameter_int(from, "compress-threads", 4);
-    migrate_set_parameter_bool(from, "compress-wait-thread", true);
-    migrate_set_parameter_int(to, "decompress-threads", 4);
-
-    migrate_set_capability(from, "compress", true);
-    migrate_set_capability(to, "compress", true);
-
-    return NULL;
-}
-
-static void *
-test_migrate_compress_nowait_start(QTestState *from,
-                                   QTestState *to)
-{
-    migrate_set_parameter_int(from, "compress-level", 9);
-    migrate_set_parameter_int(from, "compress-threads", 1);
-    migrate_set_parameter_bool(from, "compress-wait-thread", false);
-    migrate_set_parameter_int(to, "decompress-threads", 1);
-
-    migrate_set_capability(from, "compress", true);
-    migrate_set_capability(to, "compress", true);
-
-    return NULL;
-}
-
 static int migrate_postcopy_prepare(QTestState **from_ptr,
                                     QTestState **to_ptr,
                                     MigrateCommon *args)
@@ -1365,15 +1309,6 @@ static void test_postcopy_suspend(void)
 {
     MigrateCommon args = {
         .start.suspend_me = true,
-    };
-
-    test_postcopy_common(&args);
-}
-
-static void test_postcopy_compress(void)
-{
-    MigrateCommon args = {
-        .start_hook = test_migrate_compress_start
     };
 
     test_postcopy_common(&args);
@@ -1561,15 +1496,6 @@ static void test_postcopy_recovery(void)
     test_postcopy_recovery_common(&args);
 }
 
-static void test_postcopy_recovery_compress(void)
-{
-    MigrateCommon args = {
-        .start_hook = test_migrate_compress_start
-    };
-
-    test_postcopy_recovery_common(&args);
-}
-
 #ifndef _WIN32
 static void test_postcopy_recovery_double_fail(void)
 {
@@ -1678,7 +1604,7 @@ static void test_analyze_script(void)
     }
 
     g_assert(waitpid(pid, &wstatus, 0) == pid);
-    if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) {
+    if (!WIFEXITED(wstatus) || WEXITSTATUS(wstatus) != 0) {
         g_test_message("Failed to analyze the migration stream");
         g_test_fail();
     }
@@ -2021,48 +1947,6 @@ static void test_precopy_unix_xbzrle(void)
          * XBZRLE needs pages to be modified when doing the 2nd+ round
          * iteration to have real data pushed to the stream.
          */
-        .live = true,
-    };
-
-    test_precopy_common(&args);
-}
-
-static void test_precopy_unix_compress(void)
-{
-    g_autofree char *uri = g_strdup_printf("unix:%s/migsocket", tmpfs);
-    MigrateCommon args = {
-        .connect_uri = uri,
-        .listen_uri = uri,
-        .start_hook = test_migrate_compress_start,
-        /*
-         * Test that no invalid thread state is left over from
-         * the previous iteration.
-         */
-        .iterations = 2,
-        /*
-         * We make sure the compressor can always work well even if guest
-         * memory is changing.  See commit 34ab9e9743 where we used to fix
-         * a bug when only trigger-able with guest memory changing.
-         */
-        .live = true,
-    };
-
-    test_precopy_common(&args);
-}
-
-static void test_precopy_unix_compress_nowait(void)
-{
-    g_autofree char *uri = g_strdup_printf("unix:%s/migsocket", tmpfs);
-    MigrateCommon args = {
-        .connect_uri = uri,
-        .listen_uri = uri,
-        .start_hook = test_migrate_compress_nowait_start,
-        /*
-         * Test that no invalid thread state is left over from
-         * the previous iteration.
-         */
-        .iterations = 2,
-        /* Same reason for the wait version of precopy compress test */
         .live = true,
     };
 
@@ -3553,26 +3437,6 @@ int main(int argc, char **argv)
     arch = qtest_get_arch();
     is_x86 = !strcmp(arch, "i386") || !strcmp(arch, "x86_64");
 
-    /*
-     * On ppc64, the test only works with kvm-hv, but not with kvm-pr and TCG
-     * is touchy due to race conditions on dirty bits (especially on PPC for
-     * some reason)
-     */
-    if (g_str_equal(arch, "ppc64") &&
-        (!has_kvm || access("/sys/module/kvm_hv", F_OK))) {
-        g_test_message("Skipping test: kvm_hv not available");
-        return g_test_run();
-    }
-
-    /*
-     * Similar to ppc64, s390x seems to be touchy with TCG, so disable it
-     * there until the problems are resolved
-     */
-    if (g_str_equal(arch, "s390x") && !has_kvm) {
-        g_test_message("Skipping test: s390x host with KVM is required");
-        return g_test_run();
-    }
-
     tmpfs = g_dir_make_tmp("migration-test-XXXXXX", &err);
     if (!tmpfs) {
         g_test_message("Can't create temporary directory in %s: %s",
@@ -3581,6 +3445,31 @@ int main(int argc, char **argv)
     g_assert(tmpfs);
 
     module_call_init(MODULE_INIT_QOM);
+
+    migration_test_add("/migration/bad_dest", test_baddest);
+#ifndef _WIN32
+    migration_test_add("/migration/analyze-script", test_analyze_script);
+#endif
+
+    /*
+     * On ppc64, the test only works with kvm-hv, but not with kvm-pr and TCG
+     * is touchy due to race conditions on dirty bits (especially on PPC for
+     * some reason)
+     */
+    if (g_str_equal(arch, "ppc64") &&
+        (!has_kvm || access("/sys/module/kvm_hv", F_OK))) {
+        g_test_message("Skipping tests: kvm_hv not available");
+        goto test_add_done;
+    }
+
+    /*
+     * Similar to ppc64, s390x seems to be touchy with TCG, so disable it
+     * there until the problems are resolved
+     */
+    if (g_str_equal(arch, "s390x") && !has_kvm) {
+        g_test_message("Skipping tests: s390x host with KVM is required");
+        goto test_add_done;
+    }
 
     if (is_x86) {
         migration_test_add("/migration/precopy/unix/suspend/live",
@@ -3597,12 +3486,6 @@ int main(int argc, char **argv)
                            test_postcopy_preempt);
         migration_test_add("/migration/postcopy/preempt/recovery/plain",
                            test_postcopy_preempt_recovery);
-        if (getenv("QEMU_TEST_FLAKY_TESTS")) {
-            migration_test_add("/migration/postcopy/compress/plain",
-                               test_postcopy_compress);
-            migration_test_add("/migration/postcopy/recovery/compress/plain",
-                               test_postcopy_recovery_compress);
-        }
 #ifndef _WIN32
         migration_test_add("/migration/postcopy/recovery/double-failures",
                            test_postcopy_recovery_double_fail);
@@ -3613,27 +3496,10 @@ int main(int argc, char **argv)
         }
     }
 
-    migration_test_add("/migration/bad_dest", test_baddest);
-#ifndef _WIN32
-    if (!g_str_equal(arch, "s390x")) {
-        migration_test_add("/migration/analyze-script", test_analyze_script);
-    }
-#endif
     migration_test_add("/migration/precopy/unix/plain",
                        test_precopy_unix_plain);
     migration_test_add("/migration/precopy/unix/xbzrle",
                        test_precopy_unix_xbzrle);
-    /*
-     * Compression fails from time to time.
-     * Put test here but don't enable it until everything is fixed.
-     */
-    if (getenv("QEMU_TEST_FLAKY_TESTS")) {
-        migration_test_add("/migration/precopy/unix/compress/wait",
-                           test_precopy_unix_compress);
-        migration_test_add("/migration/precopy/unix/compress/nowait",
-                           test_precopy_unix_compress_nowait);
-    }
-
     migration_test_add("/migration/precopy/file",
                        test_precopy_file);
     migration_test_add("/migration/precopy/file/offset",
@@ -3785,6 +3651,8 @@ int main(int argc, char **argv)
         migration_test_add("/migration/vcpu_dirty_limit",
                            test_vcpu_dirty_limit);
     }
+
+test_add_done:
 
     ret = g_test_run();
 
